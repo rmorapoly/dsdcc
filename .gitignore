@@ -15,3 +15,5 @@ testfec/viterbi
 testfec/viterbi35
 testfec/crc
 testfec/pn
+
+*.user

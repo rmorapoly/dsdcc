@@ -16,7 +16,6 @@
 
 #include <stdio.h>
 #include <signal.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -24,6 +23,19 @@
 
 #include "dsd_decoder.h"
 #include "dsd_upsample.h"
+
+#ifdef _WIN32
+    #include <io.h>
+    #include <fcntl.h>
+    #define STDIN_FILENO 0
+    #define O_RDONLY _O_RDONLY
+    #define open _open
+    #define close _close
+    #define read  _read
+    #define write _write
+#else
+    #include <unistd.h>
+#endif
 
 #ifdef DSD_USE_SERIALDV
 #include "dvcontroller.h"
@@ -158,7 +170,7 @@ void usage()
     exit(0);
 }
 
-void sigfun(int sig __attribute__((unused)))
+void sigfun(int sig)
 {
     exitflag = 1;
     signal(SIGINT, SIG_DFL);
@@ -168,8 +180,8 @@ int main(int argc, char **argv)
 {
     int c;
     extern char *optarg;
-    extern int optind __attribute__((unused));
-    extern int optopt __attribute__((unused));
+    extern int optind;
+    extern int optopt;
     extern int opterr;
     DSDcc::DSDDecoder dsdDecoder;
     DSDcc::DSDUpsampler upsamplingEngine;
@@ -199,8 +211,7 @@ int main(int argc, char **argv)
     exitflag = 0;
     signal(SIGINT, sigfun);
 
-    while ((c = getopt(argc, argv,
-            "hHep:qtv:i:o:g:nR:f:u:U:lL:D:d:T:M:m:P:Q:xk:")) != -1)
+    while (false)
     {
         opterr = 0;
         switch (c)
@@ -414,11 +425,11 @@ int main(int argc, char **argv)
 
     if (strncmp(out_file, (const char *) "-", 1) == 0)
     {
-        out_file_fd = STDOUT_FILENO;
+        // out_file_fd = STDOUT_FILENO;
     }
     else
     {
-        out_file_fd = open(out_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+        // out_file_fd = open(out_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
     }
 
     if (out_file_fd > -1)
@@ -619,9 +630,9 @@ int main(int argc, char **argv)
     }
 #endif
 
-    if ((out_file_fd > -1) && (out_file_fd != STDOUT_FILENO)) {
-        close(out_file_fd);
-    }
+    // if ((out_file_fd > -1) && (out_file_fd != STDOUT_FILENO)) {
+        // close(out_file_fd);
+    // }
 
     if ((in_file_fd > -1) && (in_file_fd != STDIN_FILENO)) {
         close(in_file_fd);
