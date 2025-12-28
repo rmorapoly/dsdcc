@@ -2,6 +2,7 @@
 .project
 .settings
 build*
+*.user*
 testfec/*.o
 testfec/qr
 testfec/golay20
@@ -15,5 +16,3 @@ testfec/viterbi
 testfec/viterbi35
 testfec/crc
 testfec/pn
-
-*.user

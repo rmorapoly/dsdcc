@@ -16,30 +16,127 @@
 
 #include <stdio.h>
 #include <signal.h>
+#include <math.h>
+#include <string.h>
+#include <stdlib.h>
+#include <algorithm>
+
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#define open _open
+#define read _read
+#define write _write
+#define close _close
+#define O_RDONLY _O_RDONLY
+#define O_WRONLY _O_WRONLY
+#define O_CREAT _O_CREAT
+#define O_TRUNC _O_TRUNC
+#define S_IRUSR _S_IREAD
+#define S_IWUSR _S_IWRITE
+#define S_IRGRP 0
+#define S_IWGRP 0
+#define S_IROTH 0
+#else
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <math.h>
+#endif
 
 #include "dsd_decoder.h"
 #include "dsd_upsample.h"
 
-#ifdef _WIN32
-    #include <io.h>
-    #include <fcntl.h>
-    #define STDIN_FILENO 0
-    #define O_RDONLY _O_RDONLY
-    #define open _open
-    #define close _close
-    #define read  _read
-    #define write _write
-#else
-    #include <unistd.h>
-#endif
-
 #ifdef DSD_USE_SERIALDV
 #include "dvcontroller.h"
 #endif
+
+// Platform-specific attribute macros
+#ifdef _MSC_VER
+#define UNUSED(x) ((void)(x))
+#else
+#define UNUSED(x) __attribute__((unused)) x
+#endif
+
+// Simple getopt replacement for Windows
+#ifdef _WIN32
+static char *optarg = NULL;
+static int optind = 1;
+static int optopt = 0;
+static int opterr = 1;
+
+static int getopt(int argc, char * const argv[], const char *optstring)
+{
+    static int nextchar = 1;
+    char c;
+    const char *optchar;
+
+    if (optind >= argc) {
+        return -1;
+    }
+
+    if (argv[optind][0] != '-') {
+        return -1;
+    }
+
+    if (nextchar == 0 || argv[optind][nextchar] == '\0') {
+        optind++;
+        nextchar = 1;
+        if (optind >= argc || argv[optind][0] != '-') {
+            return -1;
+        }
+    }
+
+    c = argv[optind][nextchar];
+    optchar = strchr(optstring, c);
+    if (optchar == NULL) {
+        optopt = c;
+        if (opterr) {
+            fprintf(stderr, "Unknown option: -%c\n", c);
+        }
+        nextchar++;
+        return '?';
+    }
+
+    if (optchar[1] == ':') {
+        if (argv[optind][nextchar + 1] != '\0') {
+            optarg = &argv[optind][nextchar + 1];
+            optind++;
+            nextchar = 1;
+        } else {
+            optind++;
+            if (optind >= argc) {
+                optopt = c;
+                if (opterr) {
+                    fprintf(stderr, "Option -%c requires an argument\n", c);
+                }
+                nextchar = 1;
+                return '?';
+            }
+            optarg = argv[optind];
+            optind++;
+            nextchar = 1;
+        }
+    } else {
+        nextchar++;
+        if (argv[optind][nextchar] == '\0') {
+            optind++;
+            nextchar = 1;
+        }
+        optarg = NULL;
+    }
+
+    return c;
+}
+#else
+extern char *optarg;
+extern int optind;
+extern int optopt;
+extern int opterr;
+#endif
+
 int exitflag;
 
 class Mixer
@@ -62,7 +159,7 @@ private:
 
 void Mixer::mix(unsigned int size1, unsigned int size2, short *channel1, short *channel2)
 {
-    unsigned int m_mixSize = std::max(size1, size2);
+    m_mixSize = std::max(size1, size2);
 
     if (m_mixSize > m_mixSizeMax)
     {
@@ -71,8 +168,8 @@ void Mixer::mix(unsigned int size1, unsigned int size2, short *channel1, short *
             delete[] m_mix;
         }
 
-        m_mix = new short[m_mixSizeMax];
         m_mixSizeMax = m_mixSize;
+        m_mix = new short[m_mixSizeMax];
     }
 
     for (unsigned int i = 0; i < m_mixSize; i++)
@@ -172,6 +269,7 @@ void usage()
 
 void sigfun(int sig)
 {
+    UNUSED(sig);
     exitflag = 1;
     signal(SIGINT, SIG_DFL);
 }
@@ -179,10 +277,6 @@ void sigfun(int sig)
 int main(int argc, char **argv)
 {
     int c;
-    extern char *optarg;
-    extern int optind;
-    extern int optopt;
-    extern int opterr;
     DSDcc::DSDDecoder dsdDecoder;
     DSDcc::DSDUpsampler upsamplingEngine;
     char in_file[1023];
@@ -211,9 +305,17 @@ int main(int argc, char **argv)
     exitflag = 0;
     signal(SIGINT, sigfun);
 
-    while (false)
+#ifdef _WIN32
+    opterr = 0;
+#endif
+    while ((c = getopt(argc, argv,
+            "hHep:qtv:i:o:g:nR:f:u:U:lL:D:d:T:M:m:P:Q:xk:")) != -1)
     {
+#ifdef _WIN32
         opterr = 0;
+#else
+        opterr = 0;
+#endif
         switch (c)
         {
         case 'h':
@@ -425,11 +527,11 @@ int main(int argc, char **argv)
 
     if (strncmp(out_file, (const char *) "-", 1) == 0)
     {
-        // out_file_fd = STDOUT_FILENO;
+        out_file_fd = STDOUT_FILENO;
     }
     else
     {
-        // out_file_fd = open(out_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+        out_file_fd = open(out_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
     }
 
     if (out_file_fd > -1)
@@ -630,9 +732,9 @@ int main(int argc, char **argv)
     }
 #endif
 
-    // if ((out_file_fd > -1) && (out_file_fd != STDOUT_FILENO)) {
-        // close(out_file_fd);
-    // }
+    if ((out_file_fd > -1) && (out_file_fd != STDOUT_FILENO)) {
+        close(out_file_fd);
+    }
 
     if ((in_file_fd > -1) && (in_file_fd != STDIN_FILENO)) {
         close(in_file_fd);

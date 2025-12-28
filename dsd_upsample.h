@@ -17,10 +17,12 @@
 #ifndef DSD_UPSAMPLE_H_
 #define DSD_UPSAMPLE_H_
 
+#include "export.h"
+
 namespace DSDcc
 {
 
-class DSDUpsampler
+class DSDCC_API DSDUpsampler
 {
 public:
     DSDUpsampler();
